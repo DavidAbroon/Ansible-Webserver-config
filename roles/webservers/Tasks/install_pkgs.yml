@@ -1,0 +1,20 @@
+---
+- name: My playbook
+  hosts: aws_djangoblog
+  become: true
+  tasks:
+    - name: Update and upgrade apt packages
+      become: true
+      apt:
+        upgrade: true
+        update_cache: true
+        cache_valid_time: 86400 #One day
+
+    - name: Install/verify package installation
+      apt:
+        pkg:
+          - nginx
+          - curl
+          - python3-pip
+          - virtualenv
+          - git

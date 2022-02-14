@@ -1,0 +1,45 @@
+---
+- name: Create/Config user on webserver
+  hosts: aws_djangoblog
+  become: true
+  gather_facts: false
+  vars:
+    - user: django_blog
+  tasks:
+    - include_vars: ~/Documents/Ansible/roles/webservers/vars/main.yml
+    - name: Create a login user
+      user:
+        name: "{{ user }}"
+        shell: /bin/bash
+        groups: sudo
+        password: "{{ user_pass }}"
+        state: present
+
+    - name: Deny root from logging in
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        regexp: '^(#)?PermitRootLogin \w*$'
+        line: 'PermitRootLogin no'
+        state: present
+
+    - name: Change SSH port to 4444
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        regexp: '^(#)?Port 22 \w*$'
+        line: 'Port 4444'
+        state: present
+
+    - name: Create .ssh directory in new user
+      ansible.builtin.file:
+        path: /home/{{ user }}/.ssh
+        state: directory
+        mode: '0755'
+
+    - name: copy pub key to authorized_keys
+      copy:
+        src: "/home/ubuntu/.ssh/authorized_keys"
+        dest: "/home/{{ user }}/.ssh/authorized_keys"
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: "400"
+        remote_src: true
