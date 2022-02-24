@@ -4,7 +4,7 @@
   become: true
   gather_facts: false
   vars:
-    - user: django_blog
+    - user: david_aws
   tasks:
     - include_vars: ~/Documents/Ansible/roles/webservers/vars/main.yml
     - name: Create a login user
@@ -22,10 +22,9 @@
         line: 'PermitRootLogin no'
         state: present
 
-    - name: Change SSH port to 4444
+    - name: Create SSH port 4444
       lineinfile:
         dest: /etc/ssh/sshd_config
-        regexp: '^(#)?Port 22 \w*$'
         line: 'Port 4444'
         state: present
 
