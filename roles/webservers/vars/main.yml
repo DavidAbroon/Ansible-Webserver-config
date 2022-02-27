@@ -1,10 +1,9 @@
-KEY_TITLE: AWS_Djangoblog
-KEY_PATH: ~/.ssh/id_rsa.git
+---
+user: 'david_aws'
+PROJECT_PATH: /home/{{ user }}/django-blog/
 GIT_REPO: git@github.com:DavidAbroon/Django-blog.git
 GIT_BRANCH: main
-CLONE_DEST: /home/ubuntu/django-blog
-KNOWN_HOSTS_PATH: ~/.ssh/known_hosts
-GIT_EXECUTABLE: /usr/bin/git
+PROJECT_NAME: django-blog
 user_pass: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           38326537386134643833316661613130643133373663373135653136376363316439303463323062
