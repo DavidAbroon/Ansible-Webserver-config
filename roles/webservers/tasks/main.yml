@@ -1,0 +1,173 @@
+---
+- name: Playbook to config web server files
+  hosts: aws_djangoblog
+  become_method: sudo
+  become_user: david_aws
+  vars_files:
+    - ~/Documents/Ansible/roles/webservers/vars/main.yml
+
+  tasks:
+    - name: Create a login user
+      user:
+        name: "{{ user }}"
+        shell: /bin/bash
+        groups: sudo
+        password: "{{ user_pass }}"
+        state: present
+
+    - name: Deny root from logging in
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        regexp: '^(#)?PermitRootLogin \w*$'
+        line: 'PermitRootLogin no'
+        state: present
+
+    - name: Create SSH port 4444
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        line: 'Port 4444'
+        state: present
+
+    - name: Create SSH port 22
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        line: 'Port 22'
+        state: present
+
+    - name: Restart ssh.service
+      service:
+        name: ssh
+        state: restarted
+
+    - name: Create .ssh directory in new user
+      ansible.builtin.file:
+        path: /home/{{ user }}/.ssh
+        state: directory
+        mode: '0755'
+
+    - name: copy pub key to authorized_keys
+      copy:
+        src: "/home/ubuntu/.ssh/authorized_keys"
+        dest: "/home/{{ user }}/.ssh/authorized_keys"
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: "400"
+        remote_src: true
+
+    - name: Give write permissions for user directory
+      become: true
+      file:
+        path: /home/{{ user }}
+        owner: david_aws
+        group: ubuntu
+        mode: '774'
+
+    - name: Update and upgrade apt packages
+      apt:
+        upgrade: true
+        update_cache: true
+        cache_valid_time: 86400 #One day
+
+    - name: Install/verify package installation
+      apt:
+        pkg:
+          - nginx
+          - curl
+          - python3-pip
+          - virtualenv
+          - git
+
+    - name: Check if {{ PROJECT_PATH }} folder exists before attempting to clone in next task
+      stat:
+        path: /{{ PROJECT_PATH }}
+      register: project_status
+
+    - name: Clone a private repository into {{PROJECT_NAME}} folder.
+      git:
+        repo: "{{ GIT_REPO }}"
+        version: "{{ GIT_BRANCH }}"
+        dest: "/home/{{ user }}/{{ PROJECT_NAME }}"
+        accept_hostkey: yes
+      when: project_status.stat.islnk is not defined
+
+    - name: Activate Virtualenv and install requirements
+      pip:
+        requirements: "{{ PROJECT_PATH }}/requirements.txt"
+        virtualenv: "{{ PROJECT_PATH }}/venv"
+        virtualenv_site_packages: true
+
+    - name: Get Public IP address and create file
+      shell: |
+        curl https://ipinfo.io/ip > /home/{{ user }}/publicip
+
+    - name: Get content of Public IP address file (remote content)
+      slurp:
+        src: "/home/{{ user }}/publicip"
+      register: publicip_encoded
+
+    - name: decode remote content
+      set_fact:
+        remote_public_ip: "{{publicip_encoded.content | b64decode}}"
+
+    - name: Add IP Address to known hosts in django settings.py
+      lineinfile:
+        path: "{{ PROJECT_PATH }}/david_portfolio/settings.py"
+        regexp: "^ALLOWED_HOSTS."
+        line: "ALLOWED_HOSTS = ['{{ remote_public_ip }}']"
+        state: present
+
+    - name: Copy .env file to webserver
+      copy:
+        src: ~/Documents/Ansible/roles/webservers/templates/.env
+        dest: "{{ PROJECT_PATH }}/david_portfolio/.env"
+        decrypt: true
+
+    - name: Copy gunicorn.socket config file to webserver
+      become: true
+      become_user: root
+      copy:
+        src: ~/Documents/Ansible/roles/webservers/templates/gunicorn.socket
+        dest: /etc/systemd/system/gunicorn.socket
+
+    - name: Copy gunicorn.service config file to webserver
+      become: true
+      become_user: root
+      copy:
+        src: ~/Documents/Ansible/roles/webservers/templates/gunicorn.service
+        dest: /etc/systemd/system/gunicorn.service
+
+    - name: Start and enable Gunicorn Service
+      become: true
+      become_user: root
+      service:
+        name: gunicorn
+        enabled: true
+        state: started
+
+    - name: Copy sites-available NGINX file to webserver
+      become: true
+      become_user: root
+      copy:
+        src: ~/Documents/Ansible/roles/webservers/templates/sites-available
+        dest: /etc/nginx/sites-available/david_portfolio
+
+    - name: Check if symbolic link exists for sites-available file
+      stat:
+        path: "/etc/nginx/sites-enabled/david_portfolio"
+      register: sestat
+
+    - name: Create symbolic link for sites-available file
+      become: true
+      become_user: root
+      file:
+        src: "/etc/nginx/sites-available/david_portfolio"
+        dest: "/etc/nginx/sites-enabled/david_portfolio"
+        state: link
+      when: sestat.stat.islnk is defined
+
+    - name: Restart Nginx
+      become: true
+      become_user: root
+      service:
+        name: nginx
+        state: restarted
