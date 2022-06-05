@@ -4,10 +4,10 @@
   become_method: sudo
   become_user: david_aws
   vars_files:
-    - ~/Documents/Ansible/roles/webservers/vars/main.yml
+    - C:\Personal_Website\Ansible-Webserver-config\roles\webservers\vars\main.yml
 
   tasks:
-    - name: Create a login user
+    - name: Create a new login user for {{ user }}
       user:
         name: "{{ user }}"
         shell: /bin/bash
@@ -39,13 +39,13 @@
         name: ssh
         state: restarted
 
-    - name: Create .ssh directory in new user
+    - name: Create .ssh directory in {{ user }}
       ansible.builtin.file:
         path: /home/{{ user }}/.ssh
         state: directory
         mode: '0755'
 
-    - name: copy pub key to authorized_keys
+    - name: copy pub key to authorized_keys on {{ user }}
       copy:
         src: "/home/ubuntu/.ssh/authorized_keys"
         dest: "/home/{{ user }}/.ssh/authorized_keys"
